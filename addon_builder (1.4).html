@@ -1,0 +1,1136 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Bedrock Addon Builder</title>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/jszip/3.10.1/jszip.min.js"></script>
+<style>
+:root{
+  --bg:#2b2b2b;--s1:#333333;--s2:#3a3a3a;--s3:#424242;
+  --border:#505050;--accent:#6c63ff;--accent-h:#8b85ff;
+  --green:#3ecf8e;--orange:#f5a623;--red:#ff4d6d;--yellow:#ffd166;
+  --text:#e8e8e8;--text2:#aaaaaa;--text3:#666666;--r:8px;
+}
+*,*::before,*::after{box-sizing:border-box;margin:0;padding:0}
+html,body{height:100%;overflow:hidden}
+body{background:var(--bg);color:var(--text);font-family:'Segoe UI',system-ui,sans-serif;font-size:14px;display:flex;flex-direction:column}
+
+/* ── TOPBAR ── */
+.topbar{height:48px;min-height:48px;background:var(--s1);border-bottom:1px solid var(--border);
+  display:flex;align-items:center;padding:0 16px;gap:10px;flex-shrink:0;z-index:50}
+.tb-logo{font-size:1.3em}
+.tb-name{font-weight:800;font-size:.98em;letter-spacing:-.3px}
+.tb-name span{color:var(--accent)}
+.tb-sub{font-size:.68em;color:var(--text2);margin-left:2px}
+.tb-right{margin-left:auto;display:flex;gap:6px;align-items:center}
+
+/* ── WORKSPACE ── */
+.workspace{display:flex;flex:1;overflow:hidden}
+
+/* ── SIDEBAR ── */
+.sidebar{
+  width:52px;min-width:52px;background:var(--s1);border-right:1px solid var(--border);
+  display:flex;flex-direction:column;align-items:center;
+  padding:8px 0;gap:2px;flex-shrink:0;overflow:visible;
+  position:relative;z-index:40;
+}
+/* Icon nav buttons */
+.sbi{
+  position:relative;display:flex;align-items:center;justify-content:center;
+  width:40px;height:40px;border-radius:8px;border:none;background:none;
+  cursor:pointer;color:var(--text2);font-size:1.2em;
+  transition:background .1s,color .1s;flex-shrink:0;
+}
+.sbi:hover{background:var(--s3);color:var(--text)}
+.sbi.active{background:rgba(108,99,255,.22);color:var(--accent)}
+.sbi-tip{
+  position:absolute;left:calc(100% + 10px);top:50%;transform:translateY(-50%);
+  background:#111;border:1px solid var(--border);border-radius:5px;
+  padding:4px 9px;font-size:.75em;white-space:nowrap;pointer-events:none;
+  opacity:0;transition:opacity .1s;color:var(--text);z-index:100;
+}
+.sbi:hover .sbi-tip{opacity:1}
+.sb-div-h{width:32px;height:1px;background:var(--border);margin:4px 0;flex-shrink:0}
+
+/* Templates flyout */
+.tmpl-flyout{
+  position:fixed;left:52px;top:0;bottom:0;width:220px;
+  background:var(--s1);border-right:1px solid var(--border);
+  padding:12px 8px;overflow-y:auto;z-index:39;
+  transform:translateX(-100%);transition:transform .18s ease;
+  display:flex;flex-direction:column;gap:2px;
+}
+.tmpl-flyout.open{transform:translateX(0)}
+.tmpl-flyout::-webkit-scrollbar{width:3px}
+.tmpl-flyout::-webkit-scrollbar-thumb{background:var(--border)}
+.tf-label{font-size:.6em;font-weight:700;letter-spacing:2px;text-transform:uppercase;
+  color:var(--text3);padding:6px 8px 4px;display:block}
+.tf-item{display:flex;align-items:center;gap:8px;padding:7px 10px;border-radius:6px;
+  background:none;border:none;color:var(--text2);font-size:.83em;cursor:pointer;
+  width:100%;text-align:left;transition:background .1s,color .1s;white-space:nowrap}
+.tf-item:hover{background:var(--s3);color:var(--text)}
+.tf-badge{margin-left:auto;font-size:.6em;font-weight:700;padding:1px 5px;border-radius:10px}
+.tf-b-both{background:rgba(108,99,255,.18);color:var(--accent)}
+.tf-b-bp{background:rgba(245,166,35,.15);color:var(--orange)}
+.tf-b-rp{background:rgba(62,207,142,.15);color:var(--green)}
+.tf-div{height:1px;background:var(--border);margin:5px 4px}
+.tf-danger:hover{background:rgba(255,77,109,.1);color:var(--red)}
+
+/* flyout overlay (click-outside) */
+.flyout-overlay{display:none;position:fixed;inset:0;z-index:38}
+.flyout-overlay.open{display:block}
+
+/* ── MAIN ── */
+.main{flex:1;overflow-y:auto;padding:20px 24px;background:var(--bg)}
+.main::-webkit-scrollbar{width:5px}
+.main::-webkit-scrollbar-thumb{background:var(--border);border-radius:5px}
+
+/* ── PANELS ── */
+.panel{display:none}.panel.active{display:block}
+.ph{display:flex;align-items:center;gap:11px;margin-bottom:18px;padding-bottom:13px;border-bottom:1px solid var(--border)}
+.ph-icon{font-size:1.6em}.ph-title{font-size:1.1em;font-weight:800}
+.ph-sub{font-size:.75em;color:var(--text2);margin-top:2px}
+
+/* ── COLLAPSIBLE CARD ── */
+.card{background:var(--s1);border:1px solid var(--border);border-radius:var(--r);margin-bottom:10px;overflow:hidden}
+.card-hd{display:flex;align-items:center;gap:8px;padding:12px 14px;cursor:pointer;user-select:none;
+  transition:background .1s}
+.card-hd:hover{background:var(--s2)}
+.card-caret{color:var(--text3);font-size:.72em;transition:transform .15s;flex-shrink:0}
+.card-caret.o{transform:rotate(90deg)}
+.card-title-txt{flex:1;font-size:.67em;font-weight:700;letter-spacing:1.5px;color:var(--text3);
+  text-transform:uppercase;display:flex;align-items:center;gap:6px}
+.card-body{padding:14px;border-top:1px solid var(--border);display:none}
+.card-body.o{display:block}
+/* Static card (no collapse) */
+.card-static .card-hd{cursor:default}
+.card-static .card-hd:hover{background:transparent}
+.card-static .card-body{display:block;border-top:1px solid var(--border)}
+.cd{width:5px;height:5px;border-radius:50%;flex-shrink:0}
+.cd-bp{background:var(--orange)}.cd-rp{background:var(--green)}.cd-both{background:var(--accent)}
+
+/* ── FORMS ── */
+.fr{margin-bottom:11px}
+.fr label,.lbl{font-size:.78em;color:var(--text2);display:block;margin-bottom:4px}
+input[type=text],input[type=number],textarea,select{
+  width:100%;padding:7px 10px;background:var(--s2);border:1px solid var(--border);
+  border-radius:5px;color:var(--text);font-size:.86em;outline:none;
+  transition:border-color .15s;font-family:inherit}
+input[type=text]:focus,input[type=number]:focus,textarea:focus,select:focus{border-color:var(--accent)}
+select option{background:var(--s2)}
+textarea{resize:vertical;min-height:65px}
+.v3{display:grid;grid-template-columns:1fr 1fr 1fr;gap:7px}
+.f2{display:grid;grid-template-columns:1fr 1fr;gap:11px}
+
+/* ── FILE INPUT ── */
+input[type=file].fi{width:100%;padding:6px;background:var(--s2);border:1px solid var(--border);
+  border-radius:5px;color:var(--text2);font-size:.78em;cursor:pointer}
+input[type=file].fi::-webkit-file-upload-button{background:var(--s3);border:1px solid var(--border);
+  color:var(--text);border-radius:4px;padding:3px 9px;cursor:pointer;font-size:.83em;margin-right:8px}
+
+/* ── TOGGLE ── */
+.tr{display:flex;align-items:center;justify-content:space-between;
+  padding:8px 11px;background:var(--s2);border-radius:6px;margin-bottom:6px}
+.tr-info{flex:1;margin-right:12px}
+.tr-info b{font-size:.84em;display:block}.tr-info p{font-size:.71em;color:var(--text2);margin-top:1px}
+.tgl{position:relative;width:34px;height:19px;flex-shrink:0}
+.tgl input{opacity:0;width:0;height:0}
+.tsl{position:absolute;inset:0;background:var(--border);border-radius:20px;cursor:pointer;transition:background .2s}
+.tsl::before{content:'';position:absolute;width:13px;height:13px;border-radius:50%;background:#fff;top:3px;left:3px;transition:transform .2s}
+.tgl input:checked+.tsl{background:var(--accent)}.tgl input:checked+.tsl::before{transform:translateX(15px)}
+
+/* ── TABS ── */
+.tabs{display:flex;gap:2px;margin-bottom:13px;border-bottom:1px solid var(--border)}
+.tb{padding:6px 13px;border-radius:5px 5px 0 0;background:none;border:1px solid transparent;
+  border-bottom:none;color:var(--text2);font-size:.82em;font-weight:600;cursor:pointer;transition:color .1s}
+.tb:hover{color:var(--text)}.tb.active{color:var(--accent);background:var(--s1);
+  border-color:var(--border);border-bottom:1px solid var(--s1);margin-bottom:-1px}
+.tc{display:none}.tc.active{display:block}
+
+/* ── BUTTONS ── */
+.btn{display:inline-flex;align-items:center;gap:5px;padding:7px 14px;border-radius:5px;
+  font-size:.82em;font-weight:700;cursor:pointer;border:none;transition:filter .1s,transform .08s}
+.btn:active{transform:scale(.97)}
+.btn-primary{background:var(--accent);color:#fff}.btn-primary:hover{filter:brightness(1.12)}
+.btn-green{background:var(--green);color:#111}.btn-green:hover{filter:brightness(1.1)}
+.btn-orange{background:var(--orange);color:#111}.btn-orange:hover{filter:brightness(1.08)}
+.btn-ghost{background:var(--s2);color:var(--text2);border:1px solid var(--border)}
+.btn-ghost:hover{border-color:var(--accent);color:var(--text)}
+.btn-danger{background:rgba(255,77,109,.12);color:var(--red);border:1px solid rgba(255,77,109,.2)}
+.btn-danger:hover{background:rgba(255,77,109,.22)}
+.btn-sm{padding:4px 9px;font-size:.74em}.btn:disabled{opacity:.35;pointer-events:none}
+
+/* ── UUID ── */
+.urow{display:flex;align-items:center;gap:7px;background:var(--bg);border:1px solid var(--border);
+  border-radius:5px;padding:6px 10px;font-family:'Courier New',monospace;font-size:.76em;color:var(--text2)}
+.uval{flex:1;word-break:break-all}
+.ubtn{background:none;border:none;cursor:pointer;color:var(--accent);font-size:.9em;padding:0 2px}
+.ubtn:hover{color:var(--accent-h)}
+
+/* ── JSON PREVIEW ── */
+.jpre{background:#1a1a1a;border:1px solid var(--border);border-radius:6px;padding:12px;
+  overflow:auto;font-family:'Courier New',monospace;font-size:.78em;line-height:1.65;
+  white-space:pre;max-height:360px}
+.jk{color:#7ca2ff}.jvs{color:#7ec994}.jvn{color:#cf84e0}
+
+/* ── TEMPLATE GRID ── */
+.tgrid{display:grid;grid-template-columns:repeat(auto-fill,minmax(148px,1fr));gap:9px;margin-bottom:13px}
+.tcard{background:var(--s1);border:1.5px solid var(--border);border-radius:var(--r);
+  padding:13px;cursor:pointer;transition:border-color .1s,transform .1s;text-align:center}
+.tcard:hover{border-color:var(--accent);transform:translateY(-2px)}
+.tcard.sel{border-color:var(--accent);background:rgba(108,99,255,.09)}
+.ti{font-size:1.85em;margin-bottom:5px}.tn{font-weight:700;font-size:.85em}
+.td{font-size:.7em;color:var(--text2);margin-top:2px}
+
+/* ── FOLDER CARDS ── */
+.fcards{display:flex;flex-direction:column;gap:6px}
+.fcard{background:var(--s2);border:1px solid var(--border);border-radius:var(--r);overflow:hidden}
+.fch{display:flex;align-items:center;gap:7px;padding:7px 10px;cursor:pointer;
+  background:var(--s1);border-bottom:1px solid var(--border);user-select:none}
+.fch:hover{background:var(--s2)}
+.fcaret{color:var(--text3);font-size:.72em;transition:transform .15s;flex-shrink:0}
+.fcaret.o{transform:rotate(90deg)}
+.fname{flex:1;font-weight:600;font-size:.85em;color:var(--yellow)}
+.fname.rf{color:var(--text2)}.fname.sp{color:var(--green)}
+.fbody{padding:10px;display:none}.fbody.o{display:block}
+.facts{display:flex;gap:4px}
+
+/* ── DROP ZONE ── */
+.dz{border:1.5px dashed var(--border);border-radius:5px;padding:13px;text-align:center;
+  cursor:pointer;transition:border-color .15s,background .15s;background:var(--bg)}
+.dz:hover,.dz.over{border-color:var(--accent);background:rgba(108,99,255,.05)}
+.dz input{display:none}.dz-i{font-size:1.25em;margin-bottom:3px}
+.dz-t{color:var(--text2);font-size:.78em}.dz-t span{color:var(--accent)}
+
+/* ── CHIPS ── */
+.chips{display:flex;flex-wrap:wrap;gap:4px;margin-top:5px}
+.chip{display:flex;align-items:center;gap:3px;background:var(--s3);border:1px solid var(--border);
+  border-radius:3px;padding:2px 7px;font-size:.72em}
+.crm{background:none;border:none;color:var(--text2);cursor:pointer;padding:0 0 0 3px;font-size:.88em}
+.crm:hover{color:var(--red)}
+
+/* ── ICON PREVIEW ── */
+.ipw{display:flex;align-items:center;gap:11px;margin-top:7px}
+.ipv{width:56px;height:56px;border-radius:7px;object-fit:cover;border:2px solid var(--border);
+  background:var(--s3);image-rendering:pixelated}
+.ipi{font-size:.72em;color:var(--text2)}
+
+/* ── SUBPACK CARD ── */
+.spcard{background:var(--bg);border:1px solid var(--border);border-radius:5px;padding:10px;margin-bottom:7px}
+.sph{display:flex;align-items:center;gap:7px;margin-bottom:8px}
+.spn{font-weight:700;font-size:.82em;flex:1;color:var(--yellow)}
+.sprow2{display:grid;grid-template-columns:1fr 70px;gap:7px}
+
+/* ── DOWNLOAD ── */
+.dlbox{background:var(--s1);border:1.5px solid var(--border);border-radius:var(--r);padding:20px;text-align:center}
+.dlbtns{display:flex;justify-content:center;gap:11px;flex-wrap:wrap;margin-top:14px}
+.dlnote{font-size:.72em;color:var(--text2);margin-top:9px}
+
+/* ── INFO ── */
+.info{background:rgba(108,99,255,.1);border:1px solid rgba(108,99,255,.25);border-radius:5px;
+  padding:8px 11px;font-size:.78em;color:var(--text2);margin-bottom:10px}
+.info b{color:var(--accent)}
+
+/* ── FOOTER ── */
+.footer{padding:7px 16px;border-top:1px solid var(--border);font-size:.68em;color:var(--text3);
+  text-align:center;flex-shrink:0}
+.footer a{color:var(--text2);text-decoration:none}.footer a:hover{color:var(--accent)}
+
+::-webkit-scrollbar{width:5px;height:5px}
+::-webkit-scrollbar-thumb{background:var(--border);border-radius:5px}
+::-webkit-scrollbar-thumb:hover{background:var(--accent)}
+</style>
+</head>
+<body>
+
+<!-- TOPBAR -->
+<div class="topbar">
+  <span class="tb-logo">⛏️</span>
+  <span class="tb-name">Bedrock <span>Addon</span> Builder</span>
+  <span class="tb-sub">· Minecraft Bedrock Edition</span>
+  <div class="tb-right">
+    <a class="btn btn-ghost btn-sm" href="https://wiki.bedrock.dev/guide/project-setup" target="_blank">📖 Wiki</a>
+    <a class="btn btn-ghost btn-sm" href="https://discord.gg/jx4p9x9fQv" target="_blank">💬 Discord</a>
+  </div>
+</div>
+
+<div class="workspace">
+
+<!-- ── ICON SIDEBAR ── -->
+<nav class="sidebar">
+  <!-- workflow nav -->
+  <button class="sbi active" id="nav-template" onclick="showPanel('template')" title="Template">
+    🏗️<span class="sbi-tip">Template</span>
+  </button>
+  <button class="sbi" id="nav-files" onclick="showPanel('files')" title="Files & Folders">
+    📁<span class="sbi-tip">Files &amp; Folders</span>
+  </button>
+  <button class="sbi" id="nav-manifest" onclick="showPanel('manifest')" title="Manifest">
+    📜<span class="sbi-tip">Manifest</span>
+  </button>
+  <button class="sbi" id="nav-download" onclick="showPanel('download')" title="Download">
+    📦<span class="sbi-tip">Download</span>
+  </button>
+  <div class="sb-div-h"></div>
+  <!-- templates toggle -->
+  <button class="sbi" id="nav-templates-btn" onclick="toggleFlyout()" title="Templates">
+    ✨<span class="sbi-tip">Templates</span>
+  </button>
+  <div class="sb-div-h"></div>
+  <!-- quick -->
+  <button class="sbi" onclick="regenAll()" title="Regen UUIDs">
+    🔄<span class="sbi-tip">Regen UUIDs</span>
+  </button>
+  <button class="sbi tf-danger" onclick="clearAll()" title="Clear All">
+    🗑️<span class="sbi-tip">Clear All</span>
+  </button>
+</nav>
+
+<!-- TEMPLATES FLYOUT (slides in when ✨ clicked) -->
+<div class="flyout-overlay" id="flyout-overlay" onclick="closeFlyout()"></div>
+<div class="tmpl-flyout" id="tmpl-flyout">
+  <span class="tf-label">Templates</span>
+  <button class="tf-item" onclick="quickT('items');closeFlyout()">🗡️ Items <span class="tf-badge tf-b-both">BP+RP</span></button>
+  <button class="tf-item" onclick="quickT('blocks');closeFlyout()">🧱 Blocks <span class="tf-badge tf-b-both">BP+RP</span></button>
+  <button class="tf-item" onclick="quickT('mob');closeFlyout()">🐉 Mob <span class="tf-badge tf-b-both">BP+RP</span></button>
+  <button class="tf-item" onclick="quickT('worldgen');closeFlyout()">🌍 World Gen <span class="tf-badge tf-b-bp">BP</span></button>
+  <button class="tf-item" onclick="quickT('recipes');closeFlyout()">🫕 Recipes <span class="tf-badge tf-b-bp">BP</span></button>
+  <button class="tf-item" onclick="quickT('loot');closeFlyout()">🎲 Loot Tables <span class="tf-badge tf-b-bp">BP</span></button>
+  <button class="tf-item" onclick="quickT('empty');closeFlyout()">🗃️ Empty Pack <span class="tf-badge tf-b-both">BP+RP</span></button>
+  <button class="tf-item" onclick="quickT('subpacks12');closeFlyout()">📦 Subpacks (12) <span class="tf-badge tf-b-both">BP+RP</span></button>
+  <div class="tf-div"></div>
+  <span class="tf-label">Quick</span>
+  <button class="tf-item" onclick="regenAll();closeFlyout()">🔄 Regen UUIDs</button>
+  <button class="tf-item tf-danger" onclick="clearAll();closeFlyout()">🗑️ Clear All</button>
+</div>
+
+<!-- ── MAIN ── -->
+<main class="main">
+
+<!-- ════ TEMPLATE PANEL ════ -->
+<div class="panel active" id="panel-template">
+  <div class="ph"><span class="ph-icon">🏗️</span><div><div class="ph-title">Choose a Template</div><div class="ph-sub">Select a starting structure, or build from scratch.</div></div></div>
+  <div class="tgrid" id="tgrid"></div>
+  <div class="card" id="tprev" style="display:none">
+    <div class="card-hd card-static-hd" style="cursor:default">
+      <div class="card-title-txt"><span class="cd cd-both"></span>Structure Preview</div>
+    </div>
+    <div class="card-body" style="display:block">
+      <div id="tprev-c"></div>
+      <div style="display:flex;gap:7px;flex-wrap:wrap;margin-top:13px">
+        <button class="btn btn-primary" onclick="applyTemplate()">✅ Apply &amp; Go to Files</button>
+        <button class="btn btn-ghost" onclick="clearTSel()">✕ Cancel</button>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- ════ FILES PANEL ════ -->
+<div class="panel" id="panel-files">
+  <div class="ph"><span class="ph-icon">📁</span><div><div class="ph-title">Files &amp; Folders</div><div class="ph-sub">Assign files to pack folders. Drag-drop or click to browse.</div></div></div>
+  <div class="tabs">
+    <button class="tb active" onclick="swTab('bp-f',this)">🟠 Behavior Pack</button>
+    <button class="tb" onclick="swTab('rp-f',this)">🟢 Resource Pack</button>
+  </div>
+  <div class="tc active" id="tab-bp-f">
+    <div class="fcards" id="bp-fl"></div>
+    <div style="margin-top:9px"><button class="btn btn-ghost btn-sm" onclick="addRoot('bp')">＋ Add Folder</button></div>
+  </div>
+  <div class="tc" id="tab-rp-f">
+    <div class="fcards" id="rp-fl"></div>
+    <div style="margin-top:9px"><button class="btn btn-ghost btn-sm" onclick="addRoot('rp')">＋ Add Folder</button></div>
+  </div>
+</div>
+
+<!-- ════ MANIFEST PANEL ════ -->
+<div class="panel" id="panel-manifest">
+  <div class="ph"><span class="ph-icon">📜</span><div><div class="ph-title">Manifest Editor</div><div class="ph-sub">Configure identity, modules, metadata and subpacks.</div></div></div>
+  <div class="tabs">
+    <button class="tb active" onclick="swTab('mf-bp',this)">🟠 Behavior Pack</button>
+    <button class="tb" onclick="swTab('mf-rp',this)">🟢 Resource Pack</button>
+    <button class="tb" onclick="swTab('mf-pv',this);updatePreview()">👁 JSON Preview</button>
+  </div>
+
+  <!-- ── BP ── -->
+  <div class="tc active" id="tab-mf-bp">
+
+    <!-- Pack Name (always visible, no collapse) -->
+    <div class="card">
+      <div class="card-hd" style="cursor:default">
+        <div class="card-title-txt"><span class="cd cd-bp"></span>Pack Name &amp; Description</div>
+      </div>
+      <div class="card-body" style="display:block">
+        <div class="fr">
+          <label>Pack Name <span style="color:var(--red)">*</span></label>
+          <input type="text" id="bp-name" placeholder="my_addon_bp" oninput="slug(this);syncDesc('bp');updatePreview()">
+        </div>
+        <div class="fr">
+          <label>Description <span style="font-size:.85em;color:var(--text2)">(shared between BP &amp; RP if RP left blank)</span></label>
+          <textarea id="bp-desc" rows="2" placeholder="A cool addon" oninput="updatePreview()"></textarea>
+        </div>
+      </div>
+    </div>
+
+    <!-- Collapsed: Version -->
+    <div class="card" id="crd-bp-ver">
+      <div class="card-hd" onclick="togCard('bp-ver')">
+        <span class="fcaret" id="car-bp-ver">▶</span>
+        <div class="card-title-txt"><span class="cd cd-bp"></span>Version</div>
+      </div>
+      <div class="card-body" id="body-bp-ver">
+        <div class="f2">
+          <div class="fr"><label>Pack Version</label><div class="v3"><input type="number" id="bp-v0" value="1" min="0" oninput="updatePreview()"><input type="number" id="bp-v1" value="0" min="0" oninput="updatePreview()"><input type="number" id="bp-v2" value="0" min="0" oninput="updatePreview()"></div></div>
+          <div class="fr"><label>Min Engine Version</label><div class="v3"><input type="number" id="bp-e0" value="1" min="0" oninput="updatePreview()"><input type="number" id="bp-e1" value="21" min="0" oninput="updatePreview()"><input type="number" id="bp-e2" value="0" min="0" oninput="updatePreview()"></div></div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Collapsed: UUIDs -->
+    <div class="card" id="crd-bp-uuid">
+      <div class="card-hd" onclick="togCard('bp-uuid')">
+        <span class="fcaret" id="car-bp-uuid">▶</span>
+        <div class="card-title-txt"><span class="cd cd-bp"></span>UUIDs</div>
+      </div>
+      <div class="card-body" id="body-bp-uuid">
+        <div class="fr"><label>Header UUID</label><div class="urow"><span class="uval" id="bp-uh">—</span><button class="ubtn" onclick="regenU('bp-uh')">🔄</button></div></div>
+        <div class="fr"><label>Module UUID</label><div class="urow"><span class="uval" id="bp-um">—</span><button class="ubtn" onclick="regenU('bp-um')">🔄</button></div></div>
+      </div>
+    </div>
+
+    <!-- Collapsed: Module & Features -->
+    <div class="card" id="crd-bp-mod">
+      <div class="card-hd" onclick="togCard('bp-mod')">
+        <span class="fcaret" id="car-bp-mod">▶</span>
+        <div class="card-title-txt"><span class="cd cd-bp"></span>Module &amp; Features</div>
+      </div>
+      <div class="card-body" id="body-bp-mod">
+        <div class="fr"><label>Module Type</label>
+          <select id="bp-mtype" onchange="onMT();updatePreview()">
+            <option value="data">data — Standard behavior pack</option>
+            <option value="script">script — Scripting API</option>
+          </select></div>
+        <div class="fr" id="bp-erow" style="display:none"><label>Script Entry</label><input type="text" id="bp-entry" value="scripts/main.js" oninput="updatePreview()"></div>
+        <div class="tr"><div class="tr-info"><b>🏆 Achievements Compatible</b><p>Adds <code>"product_type":"addon"</code> inside <code>metadata</code>. Disable for scripting/experimental features.</p></div><label class="tgl"><input type="checkbox" id="bp-ach" onchange="updatePreview()"><span class="tsl"></span></label></div>
+        <div class="tr"><div class="tr-info"><b>🔗 Depend on RP</b><p>Links BP → RP in dependencies.</p></div><label class="tgl"><input type="checkbox" id="bp-dep" onchange="updatePreview()"><span class="tsl"></span></label></div>
+        <div class="tr"><div class="tr-info"><b>🧪 Beta APIs (Experimental)</b><p>Required for <code>@minecraft/server</code>.</p></div><label class="tgl"><input type="checkbox" id="bp-beta" onchange="updatePreview()"><span class="tsl"></span></label></div>
+      </div>
+    </div>
+
+    <!-- Collapsed: Metadata -->
+    <div class="card" id="crd-bp-meta">
+      <div class="card-hd" onclick="togCard('bp-meta')">
+        <span class="fcaret" id="car-bp-meta">▶</span>
+        <div class="card-title-txt"><span class="cd cd-bp"></span>Metadata &amp; Authors</div>
+      </div>
+      <div class="card-body" id="body-bp-meta">
+        <div class="info"><b>Note:</b> <code>product_type: "addon"</code> is written here inside <code>metadata</code> when the Achievements toggle (above) is on. Authors and URL are optional.</div>
+        <div class="fr"><label>Authors (comma-separated)</label><input type="text" id="bp-au" placeholder="Steve, Alex" oninput="updatePreview()"></div>
+        <div class="fr"><label>URL</label><input type="text" id="bp-url" placeholder="https://example.com" oninput="updatePreview()"></div>
+      </div>
+    </div>
+
+    <!-- Collapsed: Pack Icon -->
+    <div class="card" id="crd-bp-icon">
+      <div class="card-hd" onclick="togCard('bp-icon')">
+        <span class="fcaret" id="car-bp-icon">▶</span>
+        <div class="card-title-txt"><span class="cd cd-bp"></span>Pack Icon</div>
+      </div>
+      <div class="card-body" id="body-bp-icon">
+        <div class="fr"><label>Upload pack_icon.png</label><input type="file" id="bp-if" class="fi" accept="image/png" onchange="onIcFile('bp')"></div>
+        <div class="fr"><label>— or — Image URL <span style="color:var(--text2);font-size:.85em">(default: bedrock wiki icon)</span></label>
+          <input type="text" id="bp-iu" value="https://wiki.bedrock.dev/assets/images/guide/project-setup/pack_icon.png" oninput="onIcUrl('bp')"></div>
+        <div class="ipw"><img class="ipv" id="bp-ip" src="https://wiki.bedrock.dev/assets/images/guide/project-setup/pack_icon.png" alt="BP"><div class="ipi">64×64 PNG<br><span id="bp-il" style="color:var(--accent)">🔗 Using URL</span></div></div>
+      </div>
+    </div>
+
+    <!-- Collapsed: Subpacks -->
+    <div class="card" id="crd-bp-sp">
+      <div class="card-hd" onclick="togCard('bp-sp')">
+        <span class="fcaret" id="car-bp-sp">▶</span>
+        <div class="card-title-txt"><span class="cd cd-bp"></span>Subpacks <span style="font-size:.9em;color:var(--text2);text-transform:none;letter-spacing:0;font-weight:400;margin-left:5px">— optional in-game quality toggle</span></div>
+      </div>
+      <div class="card-body" id="body-bp-sp">
+        <div class="info"><b>How:</b> Each subpack is a subfolder inside <code>subpacks/</code>. The folder is created automatically in Files &amp; Folders when you add one here.</div>
+        <div id="bp-spl"></div>
+        <button class="btn btn-ghost btn-sm" onclick="addSP('bp')">＋ Add Subpack</button>
+      </div>
+    </div>
+
+  </div><!-- /tab-mf-bp -->
+
+  <!-- ── RP ── -->
+  <div class="tc" id="tab-mf-rp">
+
+    <div class="card">
+      <div class="card-hd" style="cursor:default">
+        <div class="card-title-txt"><span class="cd cd-rp"></span>Pack Name &amp; Description</div>
+      </div>
+      <div class="card-body" style="display:block">
+        <div class="fr"><label>Pack Name <span style="color:var(--red)">*</span></label><input type="text" id="rp-name" placeholder="my_addon_rp" oninput="slug(this);updatePreview()"></div>
+        <div class="fr">
+          <label>Description <span style="font-size:.85em;color:var(--text2)">(falls back to BP description if blank)</span></label>
+          <textarea id="rp-desc" rows="2" placeholder="Leave blank to use BP description" oninput="updatePreview()"></textarea>
+        </div>
+      </div>
+    </div>
+
+    <div class="card" id="crd-rp-ver">
+      <div class="card-hd" onclick="togCard('rp-ver')"><span class="fcaret" id="car-rp-ver">▶</span><div class="card-title-txt"><span class="cd cd-rp"></span>Version</div></div>
+      <div class="card-body" id="body-rp-ver">
+        <div class="f2">
+          <div class="fr"><label>Pack Version</label><div class="v3"><input type="number" id="rp-v0" value="1" min="0" oninput="updatePreview()"><input type="number" id="rp-v1" value="0" min="0" oninput="updatePreview()"><input type="number" id="rp-v2" value="0" min="0" oninput="updatePreview()"></div></div>
+          <div class="fr"><label>Min Engine Version</label><div class="v3"><input type="number" id="rp-e0" value="1" min="0" oninput="updatePreview()"><input type="number" id="rp-e1" value="21" min="0" oninput="updatePreview()"><input type="number" id="rp-e2" value="0" min="0" oninput="updatePreview()"></div></div>
+        </div>
+      </div>
+    </div>
+
+    <div class="card" id="crd-rp-uuid">
+      <div class="card-hd" onclick="togCard('rp-uuid')"><span class="fcaret" id="car-rp-uuid">▶</span><div class="card-title-txt"><span class="cd cd-rp"></span>UUIDs</div></div>
+      <div class="card-body" id="body-rp-uuid">
+        <div class="fr"><label>Header UUID</label><div class="urow"><span class="uval" id="rp-uh">—</span><button class="ubtn" onclick="regenU('rp-uh')">🔄</button></div></div>
+        <div class="fr"><label>Module UUID</label><div class="urow"><span class="uval" id="rp-um">—</span><button class="ubtn" onclick="regenU('rp-um')">🔄</button></div></div>
+      </div>
+    </div>
+
+    <div class="card" id="crd-rp-icon">
+      <div class="card-hd" onclick="togCard('rp-icon')"><span class="fcaret" id="car-rp-icon">▶</span><div class="card-title-txt"><span class="cd cd-rp"></span>Pack Icon</div></div>
+      <div class="card-body" id="body-rp-icon">
+        <div class="fr"><label>Upload pack_icon.png</label><input type="file" id="rp-if" class="fi" accept="image/png" onchange="onIcFile('rp')"></div>
+        <div class="fr"><label>— or — Image URL</label><input type="text" id="rp-iu" value="https://wiki.bedrock.dev/assets/images/guide/project-setup/pack_icon.png" oninput="onIcUrl('rp')"></div>
+        <div class="ipw"><img class="ipv" id="rp-ip" src="https://wiki.bedrock.dev/assets/images/guide/project-setup/pack_icon.png" alt="RP"><div class="ipi">64×64 PNG<br><span id="rp-il" style="color:var(--accent)">🔗 Using URL</span></div></div>
+      </div>
+    </div>
+
+    <div class="card" id="crd-rp-sp">
+      <div class="card-hd" onclick="togCard('rp-sp')"><span class="fcaret" id="car-rp-sp">▶</span>
+        <div class="card-title-txt"><span class="cd cd-rp"></span>Subpacks <span style="font-size:.9em;color:var(--text2);text-transform:none;letter-spacing:0;font-weight:400;margin-left:5px">— optional quality toggle</span></div>
+      </div>
+      <div class="card-body" id="body-rp-sp">
+        <div class="info"><b>How:</b> Each subpack creates a folder in <code>subpacks/</code> automatically.</div>
+        <div id="rp-spl"></div>
+        <button class="btn btn-ghost btn-sm" onclick="addSP('rp')">＋ Add Subpack</button>
+      </div>
+    </div>
+
+  </div><!-- /tab-mf-rp -->
+
+  <!-- ── JSON Preview ── -->
+  <div class="tc" id="tab-mf-pv">
+    <div class="card"><div class="card-hd" style="cursor:default"><div class="card-title-txt"><span class="cd cd-bp"></span>BP manifest.json</div></div><div class="card-body" style="display:block"><div class="jpre" id="jpre-bp">—</div></div></div>
+    <div class="card"><div class="card-hd" style="cursor:default"><div class="card-title-txt"><span class="cd cd-rp"></span>RP manifest.json</div></div><div class="card-body" style="display:block"><div class="jpre" id="jpre-rp">—</div></div></div>
+  </div>
+
+</div><!-- /panel-manifest -->
+
+<!-- ════ DOWNLOAD PANEL ════ -->
+<div class="panel" id="panel-download">
+  <div class="ph"><span class="ph-icon">📦</span><div><div class="ph-title">Download</div><div class="ph-sub">Export as .mcpack or .mcaddon.</div></div></div>
+  <div class="card"><div class="card-hd" style="cursor:default"><div class="card-title-txt"><span class="cd cd-both"></span>Pack Summary</div></div>
+    <div class="card-body" style="display:block"><div id="dl-sum" style="font-size:.84em;color:var(--text2)">Fill the manifest to see a summary.</div></div></div>
+  <div class="dlbox">
+    <div style="font-size:1.2em;font-weight:800;margin-bottom:5px">Ready to Export</div>
+    <div style="color:var(--text2);font-size:.81em">Make sure your manifest names are filled.</div>
+    <div class="dlbtns">
+      <button class="btn btn-orange" onclick="dlPack('mcpack','bp')" style="padding:10px 20px">🟠 BP .mcpack</button>
+      <button class="btn btn-green" onclick="dlPack('mcpack','rp')" style="padding:10px 20px">🟢 RP .mcpack</button>
+      <button class="btn btn-primary" onclick="dlPack('mcaddon','both')" style="font-size:.92em;padding:11px 24px">⬇️ .mcaddon (BP + RP)</button>
+    </div>
+    <div class="dlnote">💡 Downloads as <code>.zip</code> — rename to <code>.mcpack</code> or <code>.mcaddon</code> and open in Minecraft.</div>
+  </div>
+</div>
+
+</main>
+</div><!-- /workspace -->
+
+<div class="footer">
+  Made by <a href="https://discord.gg/jx4p9x9fQv" target="_blank">Unknown Minecraft</a> ·
+  <a href="https://discord.gg/jx4p9x9fQv" target="_blank">Discord</a> ·
+  Docs: <a href="https://wiki.bedrock.dev" target="_blank">wiki.bedrock.dev</a>
+</div>
+
+<script>
+/* ═══════════════════════════
+   STATE
+═══════════════════════════ */
+const S = {
+  uuids:{ bph:gu(), bpm:gu(), rph:gu(), rpm:gu() },
+  bp:{ folders:[] }, rp:{ folders:[] },
+  icons:{ bp:null, rp:null },
+  subpacks:{ bp:[], rp:[] },
+  selT:null
+};
+const DEFAULT_ICON = 'https://wiki.bedrock.dev/assets/images/guide/project-setup/pack_icon.png';
+const _open = new Set(); // open folder cards
+
+/* ═══════════════════════════
+   UUID
+═══════════════════════════ */
+function gu(){
+  return 'xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx'.replace(/[xy]/g,c=>{
+    const r=Math.random()*16|0,v=c==='x'?r:(r&3|8);return v.toString(16);
+  });
+}
+const UID_MAP={'bp-uh':'bph','bp-um':'bpm','rp-uh':'rph','rp-um':'rpm'};
+function regenU(id){ S.uuids[UID_MAP[id]]=gu(); document.getElementById(id).textContent=S.uuids[UID_MAP[id]]; updatePreview(); }
+function regenAll(){ S.uuids={bph:gu(),bpm:gu(),rph:gu(),rpm:gu()}; syncU(); updatePreview(); }
+function syncU(){
+  document.getElementById('bp-uh').textContent=S.uuids.bph;
+  document.getElementById('bp-um').textContent=S.uuids.bpm;
+  document.getElementById('rp-uh').textContent=S.uuids.rph;
+  document.getElementById('rp-um').textContent=S.uuids.rpm;
+}
+
+/* ═══════════════════════════
+   ICON
+═══════════════════════════ */
+function onIcFile(p){
+  const f=document.getElementById(p+'-if').files[0]; if(!f) return;
+  const r=new FileReader();
+  r.onload=e=>{
+    S.icons[p]={type:'file',blob:f,dataUrl:e.target.result};
+    document.getElementById(p+'-ip').src=e.target.result;
+    document.getElementById(p+'-il').textContent='📁 '+f.name;
+  };
+  r.readAsDataURL(f);
+}
+function onIcUrl(p){
+  const url=document.getElementById(p+'-iu').value.trim();
+  S.icons[p]={type:'url',url};
+  document.getElementById(p+'-ip').src=url||DEFAULT_ICON;
+  document.getElementById(p+'-il').textContent=url?'🔗 Using URL':'';
+}
+async function getIcon(p){
+  const ic=S.icons[p];
+  if(!ic){ try{ const r=await fetch(DEFAULT_ICON); if(r.ok) return await r.blob(); }catch(e){} return null; }
+  if(ic.type==='file') return ic.blob;
+  if(ic.type==='url'&&ic.url){ try{ const r=await fetch(ic.url); if(r.ok) return await r.blob(); }catch(e){} }
+  return null;
+}
+
+/* ═══════════════════════════
+   HELPERS
+═══════════════════════════ */
+function slug(el){ el.value=el.value.toLowerCase().replace(/\s+/g,'_').replace(/[^a-z0-9_\-.]/g,''); }
+function gv(id){ return document.getElementById(id).value; }
+function gn(id){ return parseInt(gv(id))||0; }
+function gck(id){ return document.getElementById(id).checked; }
+function escH(s){ return String(s||'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;'); }
+function eh(s){ return String(s||'').replace(/"/g,'&quot;').replace(/</g,'&lt;'); }
+
+/* shared description: RP uses BP desc if blank */
+function getDesc(pack){
+  const d = gv(pack+'-desc').trim();
+  if(d) return d;
+  if(pack==='rp') return gv('bp-desc').trim();
+  return '';
+}
+/* when BP desc typed and RP is blank, just preview updates */
+function syncDesc(pack){ updatePreview(); }
+
+/* ═══════════════════════════
+   PANELS & TABS
+═══════════════════════════ */
+function showPanel(n){
+  document.querySelectorAll('.panel').forEach(p=>p.classList.remove('active'));
+  document.querySelectorAll('.sbi[id^=nav-]').forEach(b=>b.classList.remove('active'));
+  document.getElementById('panel-'+n).classList.add('active');
+  const nb=document.getElementById('nav-'+n);
+  if(nb) nb.classList.add('active');
+  if(n==='download') dlSummary();
+  if(n==='manifest'){ syncU(); updatePreview(); }
+}
+function swTab(n,btn){
+  btn.closest('.tabs').querySelectorAll('.tb').forEach(b=>b.classList.remove('active'));
+  btn.classList.add('active');
+  btn.closest('.panel').querySelectorAll('.tc').forEach(t=>t.classList.remove('active'));
+  document.getElementById('tab-'+n).classList.add('active');
+}
+
+/* ═══════════════════════════
+   COLLAPSIBLE CARDS
+═══════════════════════════ */
+function togCard(id){
+  const body=document.getElementById('body-'+id);
+  const caret=document.getElementById('car-'+id);
+  if(!body) return;
+  const open=body.classList.toggle('o');
+  if(caret) caret.classList.toggle('o',open);
+}
+
+/* ═══════════════════════════
+   FLYOUT
+═══════════════════════════ */
+let flyoutOpen=false;
+function toggleFlyout(){
+  flyoutOpen=!flyoutOpen;
+  document.getElementById('tmpl-flyout').classList.toggle('open',flyoutOpen);
+  document.getElementById('flyout-overlay').classList.toggle('open',flyoutOpen);
+  document.getElementById('nav-templates-btn').classList.toggle('active',flyoutOpen);
+}
+function closeFlyout(){
+  flyoutOpen=false;
+  document.getElementById('tmpl-flyout').classList.remove('open');
+  document.getElementById('flyout-overlay').classList.remove('open');
+  document.getElementById('nav-templates-btn').classList.remove('active');
+}
+
+/* ═══════════════════════════
+   MANIFEST MODULE
+═══════════════════════════ */
+function onMT(){ document.getElementById('bp-erow').style.display=gv('bp-mtype')==='script'?'block':'none'; }
+
+/* ═══════════════════════════
+   BUILD MANIFESTS
+═══════════════════════════ */
+function buildBP(){
+  const desc=getDesc('bp');
+  const m={
+    format_version:2,
+    header:{
+      name: gv('bp-name')||'my_addon_bp',
+      description: desc,
+      uuid: S.uuids.bph,
+      version:[gn('bp-v0'),gn('bp-v1'),gn('bp-v2')],
+      min_engine_version:[gn('bp-e0'),gn('bp-e1'),gn('bp-e2')]
+    },
+    modules:[{ description:desc, type:gv('bp-mtype'), uuid:S.uuids.bpm, version:[1,0,0] }]
+  };
+  if(gv('bp-mtype')==='script'){ m.modules[0].entry=gv('bp-entry')||'scripts/main.js'; m.modules[0].language='javascript'; }
+  if(gck('bp-dep')) m.dependencies=[{uuid:S.uuids.rph,version:[1,0,0]}];
+  if(gck('bp-beta')) m.capabilities=['script_eval'];
+  // Metadata (product_type goes HERE, inside metadata — not in header)
+  const au=gv('bp-au').trim().split(',').map(s=>s.trim()).filter(Boolean);
+  const url=gv('bp-url').trim();
+  const isAddon=gck('bp-ach');
+  if(au.length||url||isAddon){
+    m.metadata={};
+    if(au.length) m.metadata.authors=au;
+    if(isAddon) m.metadata.product_type='addon';
+    if(url) m.metadata.url=url;
+    m.metadata.generated_with={addon_builder:['3.0']};
+  }
+  // Subpacks
+  const sps=S.subpacks.bp.filter(s=>s.fn);
+  if(sps.length) m.subpacks=sps.map(s=>({
+    folder_name:s.fn,
+    name:`§e ${s.fn} \n§r§o ${s.desc||''}`,
+    memory_tier:s.mt
+  }));
+  return m;
+}
+function buildRP(){
+  const desc=getDesc('rp');
+  const m={
+    format_version:2,
+    header:{
+      name:gv('rp-name')||'my_addon_rp',
+      description:desc,
+      uuid:S.uuids.rph,
+      version:[gn('rp-v0'),gn('rp-v1'),gn('rp-v2')],
+      min_engine_version:[gn('rp-e0'),gn('rp-e1'),gn('rp-e2')]
+    },
+    modules:[{ description:desc, type:'resources', uuid:S.uuids.rpm, version:[1,0,0] }]
+  };
+  if(gck('bp-dep')) m.dependencies=[{uuid:S.uuids.bph,version:[1,0,0]}];
+  const sps=S.subpacks.rp.filter(s=>s.fn);
+  if(sps.length) m.subpacks=sps.map(s=>({
+    folder_name:s.fn,
+    name:`§e ${s.fn} \n§r§o ${s.desc||''}`,
+    memory_tier:s.mt
+  }));
+  return m;
+}
+
+/* ═══════════════════════════
+   JSON PREVIEW
+═══════════════════════════ */
+function hl(obj){
+  return JSON.stringify(obj,null,2).replace(/("(\\u[a-zA-Z0-9]{4}|\\[^u]|[^\\"])*"(\s*:)?|\btrue\b|\bfalse\b|\bnull\b|-?\d+(?:\.\d*)?(?:[eE][+-]?\d+)?)/g,m=>{
+    if(/^"/.test(m)) return/:$/.test(m)?`<span class="jk">${m}</span>`:`<span class="jvs">${m}</span>`;
+    return `<span class="jvn">${m}</span>`;
+  });
+}
+function updatePreview(){
+  const b=document.getElementById('jpre-bp'), r=document.getElementById('jpre-rp');
+  if(b) b.innerHTML=hl(buildBP()); if(r) r.innerHTML=hl(buildRP());
+}
+
+/* ═══════════════════════════
+   SUBPACKS
+   - folder_name = display name (synced)
+   - auto-creates folder in Files panel
+═══════════════════════════ */
+function addSP(p){
+  S.subpacks[p].push({fn:'',desc:'',mt:0});
+  renderSP(p);
+  syncSPFolders(p);
+}
+function delSP(p,i){
+  S.subpacks[p].splice(i,1);
+  renderSP(p);
+  syncSPFolders(p);
+}
+
+function renderSP(p){
+  const el=document.getElementById(p+'-spl');
+  if(!S.subpacks[p].length){ el.innerHTML=''; return; }
+  // Build HTML as string but use data-* IDs to avoid re-render on input (fixes keyboard closing bug)
+  let html='';
+  S.subpacks[p].forEach((s,i)=>{
+    html+=`
+    <div class="spcard" id="spc-${p}-${i}">
+      <div class="sph">
+        <span style="font-size:1.05em">📦</span>
+        <span class="spn" id="spn-${p}-${i}">Subpack ${i+1}${s.fn?': '+escH(s.fn):''}</span>
+        <button class="btn btn-danger btn-sm" onclick="delSP('${p}',${i})">✕</button>
+      </div>
+      <div class="sprow2" style="margin-bottom:7px">
+        <div>
+          <label style="font-size:.73em;color:var(--text2)">folder_name = display name <span style="color:var(--red)">*</span></label>
+          <input type="text" id="spfn-${p}-${i}" value="${eh(s.fn)}" placeholder="e.g. high_quality"
+            oninput="onSPName('${p}',${i},this.value)">
+        </div>
+        <div>
+          <label style="font-size:.73em;color:var(--text2)">memory_tier</label>
+          <input type="number" id="spmt-${p}-${i}" value="${s.mt}" min="0" max="5"
+            oninput="S.subpacks['${p}'][${i}].mt=parseInt(this.value)||0;updatePreview()">
+        </div>
+      </div>
+      <div>
+        <label style="font-size:.73em;color:var(--text2)">Description (shown in-game below name)</label>
+        <input type="text" id="spdc-${p}-${i}" value="${eh(s.desc)}" placeholder="High resolution textures"
+          oninput="S.subpacks['${p}'][${i}].desc=this.value;updatePreview()">
+      </div>
+      <div style="margin-top:6px;font-size:.71em;color:var(--text2)">
+        manifest: <code style="color:var(--green)">"§e ${escH(s.fn||'name')} \\n§r§o ${escH(s.desc||'description')}"</code>
+      </div>
+    </div>`;
+  });
+  el.innerHTML=html;
+}
+
+/* Called on each keystroke in folder_name — updates state without re-rendering entire list */
+function onSPName(p,i,val){
+  S.subpacks[p][i].fn=val;
+  // update label inline
+  const lbl=document.getElementById(`spn-${p}-${i}`);
+  if(lbl) lbl.textContent=`Subpack ${i+1}${val?': '+val:''}`;
+  // update manifest preview code line
+  const card=document.getElementById(`spc-${p}-${i}`);
+  if(card){
+    const pre=card.querySelector('code');
+    if(pre) pre.textContent=`"§e ${val||'name'} \\n§r§o ${S.subpacks[p][i].desc||'description'}"`;
+  }
+  updatePreview();
+  syncSPFolders(p);
+}
+
+/* Sync the subpack folders in the Files panel */
+function syncSPFolders(p){
+  // Find or create the 'subpacks' root folder
+  let spRoot=S[p].folders.find(f=>f.name==='subpacks'&&f.isSpRoot);
+  if(!spRoot){
+    // Only create if we have subpacks
+    if(!S.subpacks[p].length) return;
+    spRoot={name:'subpacks',files:[],subs:[],isSpRoot:true,isRF:false};
+    S[p].folders.push(spRoot);
+  }
+  // Sync children: keep only folders matching current subpack fn values
+  const fns=S.subpacks[p].filter(s=>s.fn).map(s=>s.fn);
+  // Remove children that no longer exist
+  spRoot.subs=spRoot.subs.filter(sub=>fns.includes(sub.name));
+  // Add new ones
+  fns.forEach(fn=>{
+    if(!spRoot.subs.find(sub=>sub.name===fn)){
+      spRoot.subs.push({name:fn,files:[],subs:[],isRF:false});
+    }
+  });
+  // If no subpacks, remove the root
+  if(!fns.length){
+    S[p].folders=S[p].folders.filter(f=>!f.isSpRoot);
+  }
+  renderFL(p);
+}
+
+/* ═══════════════════════════
+   FOLDER STATE
+═══════════════════════════ */
+function getAt(p,path){
+  let n={subs:S[p].folders}; for(const i of path) n=n.subs[i]; return n;
+}
+function addRoot(p){
+  const name=prompt('Folder name:'); if(!name) return;
+  S[p].folders.push({name:name.trim(),files:[],subs:[],isRF:false});
+  renderFL(p);
+}
+function addSubAt(p,path){
+  const name=prompt('Subfolder name:'); if(!name) return;
+  getAt(p,path).subs.push({name:name.trim(),files:[],subs:[],isRF:false}); renderFL(p);
+}
+function delAt(p,path){
+  if(!confirm('Delete this folder and its contents?')) return;
+  const pp=path.slice(0,-1),idx=path[path.length-1];
+  const parent=pp.length?getAt(p,pp):{subs:S[p].folders};
+  const f=parent.subs[idx];
+  // if deleting a subpack root, clear subpacks too
+  if(f&&f.isSpRoot){ S.subpacks[p]=[]; renderSP(p); }
+  parent.subs.splice(idx,1); renderFL(p);
+}
+function renAt(p,path){
+  const f=getAt(p,path);
+  if(f.isSpRoot){alert('Rename subpack folders via Manifest → Subpacks.');return;}
+  const name=prompt('New name:',f.name);
+  if(name){ f.name=name.trim(); renderFL(p); }
+}
+function addFilesAt(p,path,files){
+  const f=getAt(p,path);
+  Array.from(files).forEach(fl=>{ if(!f.files.find(x=>x.name===fl.name)) f.files.push(fl); });
+  renderFL(p);
+}
+function remFileAt(p,path,fi){ getAt(p,path).files.splice(fi,1); renderFL(p); }
+function cntF(f){ let c=f.files.length; f.subs.forEach(s=>c+=cntF(s)); return c; }
+
+/* ═══════════════════════════
+   FOLDER RENDER
+═══════════════════════════ */
+function renderFL(p){
+  const el=document.getElementById(p+'-fl');
+  if(!S[p].folders.length){
+    el.innerHTML=`<div style="text-align:center;padding:24px;color:var(--text2)"><div style="font-size:1.7em">📂</div><div style="margin-top:5px">No folders yet. Apply a template or click Add Folder.</div></div>`;
+    return;
+  }
+  el.innerHTML=S[p].folders.map((f,i)=>rFC(f,[i],p)).join('');
+}
+function rFC(folder,path,p){
+  const key=p+'-'+path.join('-'), open=_open.has(key);
+  const cnt=cntF(folder), col=folder.isSpRoot?'var(--green)':(p==='bp'?'var(--orange)':'var(--green)');
+  const icon=folder.isRF?'📄':folder.isSpRoot?'📂✨':'📂';
+  let h=`<div class="fcard">
+    <div class="fch" onclick="togFCard('${key}','${p}')">
+      <span class="fcaret${open?' o':''}">▶</span>
+      <span style="font-size:1em">${icon}</span>
+      <span class="fname${folder.isRF?' rf':''}" style="color:${folder.isRF?'var(--text2)':col}">${escH(folder.name)}</span>
+      ${cnt?`<span style="font-size:.7em;color:var(--text2);background:var(--s3);border-radius:3px;padding:1px 5px">${cnt}</span>`:''}
+      <div class="facts" onclick="event.stopPropagation()">
+        <button class="btn btn-ghost btn-sm" onclick="renAt('${p}',[${path}])" title="Rename">✏️</button>
+        <button class="btn btn-danger btn-sm" onclick="delAt('${p}',[${path}])" title="Delete">🗑</button>
+      </div>
+    </div>
+    <div class="fbody${open?' o':''}">`;
+  if(folder.isRF){
+    h+=`<div style="font-family:'Courier New',monospace;font-size:.74em;background:var(--bg);border:1px solid var(--border);border-radius:4px;padding:8px;white-space:pre;overflow-x:auto;color:var(--text2)">${escH(folder.content||'{}')}</div>`;
+  } else {
+    const di='dz-'+key,fi='fp-'+key;
+    h+=`<div class="dz" id="${di}" onclick="document.getElementById('${fi}').click()"
+      ondragover="dzO(event,'${di}')" ondragleave="dzL('${di}')" ondrop="dzD(event,'${p}',[${path}],'${di}')">
+      <input type="file" id="${fi}" multiple accept=".json,.mcfunction,.lang,.txt,.png" onchange="addFilesAt('${p}',[${path}],this.files)">
+      <div class="dz-i">📥</div><div class="dz-t">Drop files here or <span>click to browse</span></div></div>`;
+    if(folder.files.length){
+      h+='<div class="chips">'+folder.files.map((f,fi)=>
+        `<div class="chip">📄 ${escH(f.name)}<button class="crm" onclick="remFileAt('${p}',[${path}],${fi})">✕</button></div>`
+      ).join('')+'</div>';
+    }
+    if(folder.subs.length){
+      h+=`<div style="margin-top:9px;padding-left:10px;border-left:2px solid var(--border)">`;
+      folder.subs.forEach((s,si)=>{ h+=rFC(s,[...path,si],p); });
+      h+='</div>';
+    }
+    if(!folder.isSpRoot){
+      h+=`<div style="margin-top:7px"><button class="btn btn-ghost btn-sm" onclick="addSubAt('${p}',[${path}])">＋ Subfolder</button></div>`;
+    }
+  }
+  h+='</div></div>'; return h;
+}
+function togFCard(key,p){ _open.has(key)?_open.delete(key):_open.add(key); renderFL(p); }
+function dzO(e,id){e.preventDefault();document.getElementById(id)?.classList.add('over')}
+function dzL(id){document.getElementById(id)?.classList.remove('over')}
+function dzD(e,p,path,id){e.preventDefault();document.getElementById(id)?.classList.remove('over');addFilesAt(p,path,e.dataTransfer.files);}
+
+/* ═══════════════════════════
+   TEMPLATES
+═══════════════════════════ */
+const TMPL={
+  items:{icon:'🗡️',name:'Items',desc:'Custom items + textures & recipes',
+    bp:[{name:'items',files:[],subs:[]},{name:'recipes',files:[],subs:[]},{name:'functions',files:[],subs:[]},{name:'scripts',files:[],subs:[]}],
+    rp:[{name:'texts',files:[],subs:[]},{name:'textures',files:[],subs:[{name:'items',files:[],subs:[]}]}],
+    rpR:[{name:'item_texture.json',content:'{\n  "resource_pack_name": "pack_name",\n  "texture_name": "atlas.items",\n  "texture_data": {\n    "namespace:item_name": { "textures": "textures/items/item_name" }\n  }\n}'}]
+  },
+  blocks:{icon:'🧱',name:'Blocks',desc:'Custom blocks + terrain textures',
+    bp:[{name:'blocks',files:[],subs:[]},{name:'loot_tables',files:[],subs:[{name:'blocks',files:[],subs:[]}]},{name:'recipes',files:[],subs:[]}],
+    rp:[{name:'textures',files:[],subs:[{name:'blocks',files:[],subs:[]}]},{name:'texts',files:[],subs:[]}],
+    rpR:[
+      {name:'terrain_texture.json',content:'{\n  "num_mip_levels": 4, "padding": 8,\n  "resource_pack_name": "pack_name",\n  "texture_name": "atlas.terrain",\n  "texture_data": { "custom_block": { "textures": "textures/blocks/custom_block" } }\n}'},
+      {name:'blocks.json',content:'{\n  "format_version": "1.21.0",\n  "namespace:block_name": { "sound": "stone", "textures": "custom_block" }\n}'}
+    ]
+  },
+  mob:{icon:'🐉',name:'Mob / Entity',desc:'Custom entity with sounds, anim & loot',
+    bp:[{name:'entities',files:[],subs:[]},{name:'loot_tables',files:[],subs:[{name:'entities',files:[],subs:[]}]},
+        {name:'spawn_rules',files:[],subs:[]},{name:'animations',files:[],subs:[]},
+        {name:'animation_controllers',files:[],subs:[]},{name:'trading',files:[],subs:[]}],
+    rp:[{name:'entity',files:[],subs:[]},{name:'models',files:[],subs:[{name:'entity',files:[],subs:[]}]},
+        {name:'textures',files:[],subs:[{name:'entity',files:[],subs:[]}]},
+        {name:'animations',files:[],subs:[]},{name:'animation_controllers',files:[],subs:[]},
+        {name:'render_controllers',files:[],subs:[]},{name:'sounds',files:[],subs:[]}],
+    rpR:[{name:'sounds.json',content:'{\n  "entity_sounds": { "entities": {\n    "namespace:entity_name": { "volume":1,"pitch":1,"events":{"ambient":"mob.entity.ambient"} }\n  }}\n}'}]
+  },
+  worldgen:{icon:'🌍',name:'World Gen',desc:'Feature rules, biomes, structures',
+    bp:[{name:'feature_rules',files:[],subs:[]},{name:'features',files:[],subs:[]},{name:'biomes',files:[],subs:[]},{name:'structures',files:[],subs:[]}],
+    rp:[]
+  },
+  recipes:{icon:'🫕',name:'Recipes',desc:'Crafting & cooking recipes',bp:[{name:'recipes',files:[],subs:[]}],rp:[]},
+  loot:{icon:'🎲',name:'Loot Tables',desc:'Entity, chest & fishing loot',
+    bp:[{name:'loot_tables',files:[],subs:[{name:'entities',files:[],subs:[]},{name:'chests',files:[],subs:[]},{name:'gameplay',files:[],subs:[{name:'fishing',files:[],subs:[]}]}]}],
+    rp:[]
+  },
+  empty:{icon:'🗃️',name:'Empty Pack',desc:'Just manifests & pack_icon',bp:[],rp:[]},
+  subpacks12:{
+    icon:'📦',name:'Subpacks (12)',desc:'12 quality tiers, BP+RP',
+    bp:[],rp:[],
+    subpackNames:[
+      {fn:'potato',       desc:'Very low quality – Potato PC'},
+      {fn:'low',          desc:'Low quality'},
+      {fn:'low_medium',   desc:'Between low and medium'},
+      {fn:'medium',       desc:'Medium quality'},
+      {fn:'medium_high',  desc:'Between medium and high'},
+      {fn:'high',         desc:'High quality'},
+      {fn:'high_ultra',   desc:'Between high and ultra'},
+      {fn:'ultra',        desc:'Ultra quality'},
+      {fn:'ultra_max',    desc:'Between ultra and max'},
+      {fn:'max',          desc:'Max quality'},
+      {fn:'cinematic',    desc:'Cinematic / showcase quality'},
+      {fn:'custom',       desc:'Custom user-defined settings'}
+    ]
+  }
+};
+
+function renderTGrid(){
+  document.getElementById('tgrid').innerHTML=Object.entries(TMPL).map(([k,t])=>
+    `<div class="tcard" id="tc-${k}" onclick="selT('${k}')"><div class="ti">${t.icon}</div><div class="tn">${t.name}</div><div class="td">${t.desc}</div></div>`
+  ).join('');
+}
+function selT(k){
+  document.querySelectorAll('.tcard').forEach(c=>c.classList.remove('sel'));
+  document.getElementById('tc-'+k).classList.add('sel');
+  S.selT=k;
+  const t=TMPL[k];
+  document.getElementById('tprev-c').innerHTML=treeHTML(t);
+  document.getElementById('tprev').style.display='block';
+  document.getElementById('tprev').scrollIntoView({behavior:'smooth',block:'nearest'});
+}
+function treeHTML(t){
+  const nodes=(arr,d)=>arr.map(n=>`<div style="padding:2px 0 2px ${d*14}px;font-family:monospace;font-size:.78em">📂 <span style="color:var(--yellow)">${n.name}</span></div>${nodes(n.subs||[],d+1)}`).join('');
+  let h='<div style="display:grid;grid-template-columns:1fr 1fr;gap:14px">';
+  h+=`<div><div style="color:var(--orange);font-weight:700;margin-bottom:6px">🟠 BP</div>${nodes(t.bp||[],0)}`;
+  if(t.subpackNames) t.subpackNames.forEach(s=>{ h+=`<div style="padding:2px 0 2px 0;font-family:monospace;font-size:.78em">📦 <span style="color:var(--green)">${s.fn}</span></div>`; });
+  h+=`</div><div><div style="color:var(--green);font-weight:700;margin-bottom:6px">🟢 RP</div>${nodes(t.rp||[],0)}`;
+  (t.rpR||[]).forEach(f=>{h+=`<div style="font-family:monospace;font-size:.78em;color:var(--text2);padding:2px 0">📄 ${f.name}</div>`;});
+  if(t.subpackNames) t.subpackNames.forEach(s=>{ h+=`<div style="padding:2px 0;font-family:monospace;font-size:.78em">📦 <span style="color:var(--green)">${s.fn}</span></div>`; });
+  h+='</div></div>'; return h;
+}
+function clearTSel(){ document.querySelectorAll('.tcard').forEach(c=>c.classList.remove('sel')); S.selT=null; document.getElementById('tprev').style.display='none'; }
+function applyTemplate(){
+  if(!S.selT) return;
+  const t=TMPL[S.selT];
+  S.bp.folders=dc(t.bp||[]);
+  S.rp.folders=dc(t.rp||[]);
+  (t.rpR||[]).forEach(rf=>S.rp.folders.push({name:rf.name,isRF:true,content:rf.content,files:[],subs:[]}));
+  // Subpacks template
+  if(t.subpackNames){
+    S.subpacks.bp=t.subpackNames.map((s,i)=>({fn:s.fn,desc:s.desc,mt:i}));
+    S.subpacks.rp=t.subpackNames.map((s,i)=>({fn:s.fn,desc:s.desc,mt:i}));
+    syncSPFolders('bp'); syncSPFolders('rp');
+  } else {
+    S.subpacks={bp:[],rp:[]};
+  }
+  _open.clear(); renderFL('bp'); renderFL('rp'); renderSP('bp'); renderSP('rp');
+  clearTSel(); showPanel('files'); updatePreview();
+}
+function quickT(k){ selT(k); showPanel('template'); }
+function dc(arr){ return arr.map(n=>({name:n.name,files:[],subs:dc(n.subs||[]),isRF:n.isRF||false,content:n.content||null})); }
+
+/* ═══════════════════════════
+   DOWNLOAD SUMMARY
+═══════════════════════════ */
+function totF(arr){ let c=0; function ct(a){a.forEach(f=>{c+=f.files.length;ct(f.subs);})} ct(arr); return c; }
+function dlSummary(){
+  document.getElementById('dl-sum').innerHTML=`
+    <div style="display:grid;grid-template-columns:1fr 1fr;gap:11px">
+      <div style="background:var(--s2);border-radius:6px;padding:11px">
+        <div style="color:var(--orange);font-weight:700;margin-bottom:5px">🟠 Behavior Pack</div>
+        <div><b>Name:</b> ${escH(gv('bp-name')||'(unnamed)')}</div>
+        <div><b>Folders:</b> ${S.bp.folders.length}</div><div><b>Files:</b> ${totF(S.bp.folders)}</div>
+        <div><b>Subpacks:</b> ${S.subpacks.bp.length}</div>
+      </div>
+      <div style="background:var(--s2);border-radius:6px;padding:11px">
+        <div style="color:var(--green);font-weight:700;margin-bottom:5px">🟢 Resource Pack</div>
+        <div><b>Name:</b> ${escH(gv('rp-name')||'(unnamed)')}</div>
+        <div><b>Folders:</b> ${S.rp.folders.length}</div><div><b>Files:</b> ${totF(S.rp.folders)}</div>
+        <div><b>Subpacks:</b> ${S.subpacks.rp.length}</div>
+      </div>
+    </div>`;
+}
+
+/* ═══════════════════════════
+   ZIP BUILD
+═══════════════════════════ */
+async function dlPack(fmt,which){
+  const zip=new JSZip();
+  const bpn=(gv('bp-name')||'my_addon_bp').trim();
+  const rpn=(gv('rp-name')||'my_addon_rp').trim();
+
+  async function build(pf,pack,mf,icon){
+    pf.file('manifest.json',JSON.stringify(mf,null,'\t'));
+    if(icon) pf.file('pack_icon.png',icon);
+    function addF(folder,zf){
+      if(folder.isRF){ pf.file(folder.name,folder.content||'{}'); return; }
+      folder.files.forEach(f=>zf.file(f.name,f));
+      folder.subs.forEach(sub=>{ if(sub.isRF){pf.file(sub.name,sub.content||'{}');return;} addF(sub,zf.folder(sub.name)); });
+    }
+    S[pack].folders.forEach(f=>{ if(f.isRF){pf.file(f.name,f.content||'{}');return;} addF(f,pf.folder(f.name)); });
+  }
+
+  if(which==='bp'||which==='both'){
+    const bf=which==='both'?zip.folder(bpn+'_[BP]'):zip;
+    await build(bf,'bp',buildBP(),await getIcon('bp'));
+  }
+  if(which==='rp'||which==='both'){
+    const rf=which==='both'?zip.folder(rpn+'_[RP]'):zip;
+    await build(rf,'rp',buildRP(),await getIcon('rp'));
+  }
+
+  const fn=which==='bp'?bpn:which==='rp'?rpn:bpn.replace(/_bp$/i,'')+'_addon';
+  const blob=await zip.generateAsync({type:'blob',compression:'DEFLATE'});
+  const a=document.createElement('a');
+  a.href=URL.createObjectURL(blob); a.download=`${fn}.${fmt}.zip`;
+  document.body.appendChild(a); a.click(); document.body.removeChild(a);
+}
+
+/* ═══════════════════════════
+   CLEAR ALL
+═══════════════════════════ */
+function clearAll(){
+  if(!confirm('Clear everything and reset?')) return;
+  S.bp.folders=[]; S.rp.folders=[]; S.subpacks={bp:[],rp:[]}; S.icons={bp:null,rp:null};
+  _open.clear();
+  ['bp-name','rp-name','bp-desc','rp-desc','bp-au','bp-url'].forEach(id=>{ const el=document.getElementById(id); if(el) el.value=''; });
+  S.uuids={bph:gu(),bpm:gu(),rph:gu(),rpm:gu()}; syncU(); updatePreview();
+  renderFL('bp'); renderFL('rp'); renderSP('bp'); renderSP('rp');
+  ['bp','rp'].forEach(p=>{
+    document.getElementById(p+'-iu').value=DEFAULT_ICON;
+    document.getElementById(p+'-ip').src=DEFAULT_ICON;
+    document.getElementById(p+'-il').textContent='🔗 Using URL';
+    const fi=document.getElementById(p+'-if'); if(fi) fi.value='';
+  });
+}
+
+/* ═══════════════════════════
+   INIT
+═══════════════════════════ */
+document.addEventListener('DOMContentLoaded',()=>{
+  renderTGrid(); renderFL('bp'); renderFL('rp');
+  renderSP('bp'); renderSP('rp'); syncU(); updatePreview();
+});
+</script>
+</body>
+</html>
